@@ -19,10 +19,10 @@ size_t readCB(uint8_t* data, size_t len, Adafruit_USBD_Audio& ref) {
   int16_t* data16 = (int16_t*)data;
   size_t samples = len / sizeof(int16_t);
   size_t result = 0;
-  // generate random stereo data
+  // generate random data
   for (int j = 0; j < samples; j++) {
     data16[j] = random(-32000, 32000);
-    sample_count += 2;
+    result += sizeof(int16_t);
   }
   return result;
 }
