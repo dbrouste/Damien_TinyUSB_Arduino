@@ -340,18 +340,20 @@ bool Adafruit_USBD_Audio::tx_done_pre_load_cb(uint8_t rhport, uint8_t itf,
   if (isMicrophone()) {
     debugWrite(1, HIGH);
     // manage buffer size
-    uint16_t len = getIOSize() - 2;  // CFG_TUD_AUDIO_EP_SZ_IN - 2;
-    if (_out_buffer.size() < len) _out_buffer.resize(len);
-
-    // return if the buffer is already filled
-    if (_out_buffer_available != 0) {
-      return true;
-    }
+    uint16_t len = getIOSize();  // CFG_TUD_AUDIO_EP_SZ_IN - 2;
+    if (_out_buffer.size() < len) _out_buffer.resize(len + 4);
 
     // fill the buffer with data
     uint8_t *adr = &_out_buffer[0];
     memset(adr, 0, len);
     _out_buffer_available = (*p_read_callback)(adr, len, *this);
+    int open = _out_buffer_available;
+    int processed = 0;
+    while (open > 0){
+      uint16_t written = tud_audio_write(adr+processed, open);
+      open -= written;
+      processed += written;
+    }
     debugWrite(1, LOW);
   }
 
@@ -367,14 +369,14 @@ bool Adafruit_USBD_Audio::tx_done_post_load_cb(uint8_t rhport,
   (void)ep_in;
   (void)cur_alt_setting;
 
-  // output audio from "microphone" buffer to usb
-  if (isMicrophone()) {
-    debugWrite(2, HIGH);
-    uint8_t *adr = &_out_buffer[0];
-    tud_audio_write(adr, _out_buffer_available);
-    _out_buffer_available = 0;
-    debugWrite(2, LOW);
-  }
+  // // output audio from "microphone" buffer to usb
+  // if (isMicrophone()) {
+  //   debugWrite(2, HIGH);
+  //   uint8_t *adr = &_out_buffer[0];
+  //   tud_audio_write(adr, _out_buffer_available);
+  //   _out_buffer_available = 0;
+  //   debugWrite(2, LOW);
+  // }
 
   return true;
 }
@@ -853,7 +855,7 @@ void Adafruit_USBD_Audio::feedback_params_cb(
   (void)func_id;
   (void)alt_itf;
   // Set feedback method to fifo counting
-  feedback_param->method = AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
+  feedback_param->method = _feedback_method; //AUDIO_FEEDBACK_METHOD_DISABLED; //AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
   feedback_param->sample_freq = _sample_rate;
 }
 #endif
