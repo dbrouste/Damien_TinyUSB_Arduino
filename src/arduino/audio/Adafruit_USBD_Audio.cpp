@@ -48,8 +48,8 @@ bool Adafruit_USBD_Audio::begin(unsigned long rate, int channels,
     setStatus(AudioProcessingStatus::ERROR);
     return false;
   }
-  if (bitsPerSample > MAX_BITS_PER_SAMPLE) {
-    LOG_AUDIO_ERROR("Invalid bits %d: must be <= %d",bitsPerSample, MAX_BITS_PER_SAMPLE);
+  if (bitsPerSample > BITS_PER_SAMPLE) {
+    LOG_AUDIO_ERROR("Invalid bits %d: must be <= %d",bitsPerSample, BITS_PER_SAMPLE);
     setStatus(AudioProcessingStatus::ERROR);
     return false;
   }

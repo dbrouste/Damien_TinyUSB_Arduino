@@ -40,8 +40,8 @@
 #ifndef AUDIO_FREQ_MAX
 #  define AUDIO_FREQ_MAX            48000
 #endif
-#ifndef MAX_BITS_PER_SAMPLE
-#  define MAX_BITS_PER_SAMPLE       32
+#ifndef BITS_PER_SAMPLE
+#  define BITS_PER_SAMPLE           16
 #endif
 
 //--------------------------------------------------------------------
@@ -85,7 +85,7 @@
 
 // Microphone
 #define CFG_TUD_AUDIO_ENABLE_EP_IN                    1
-#define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX    2         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
+#define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX    (BITS_PER_SAMPLE/8)    
 #define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX            2         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
 #define CFG_TUD_AUDIO_EP_SZ_IN                        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
 #define CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL              1
@@ -94,7 +94,7 @@
 
 // Speaker
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT                   1
-#define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX    2         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
+#define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX    (BITS_PER_SAMPLE/8)         
 #define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX            2         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
 #define CFG_TUD_AUDIO_EP_SZ_OUT                       TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
 #define CFG_TUD_AUDIO_EP_OUT_FLOW_CONTROL             1
