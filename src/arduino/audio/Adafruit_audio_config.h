@@ -32,13 +32,13 @@
 #  define CDC_DEFAULT_ACTIVE        true
 #endif
 #ifndef AUDIO_USB_MAX_CHANNELS
-#  define AUDIO_USB_MAX_CHANNELS    2
+#  define AUDIO_USB_MAX_CHANNELS    1
 #endif
 #ifndef AUDIO_FREQ_MIN
 #  define AUDIO_FREQ_MIN            8000
 #endif
 #ifndef AUDIO_FREQ_MAX
-#  define AUDIO_FREQ_MAX            48000
+#  define AUDIO_FREQ_MAX            384000
 #endif
 #ifndef BITS_PER_SAMPLE
 #  define BITS_PER_SAMPLE           16
@@ -77,7 +77,7 @@
 //--------------------------------------------------------------------
 
 // Have a look into audio_device.h for all configurations
-#define CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE              (AUDIO_FREQ_MAX*2)
+#define CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE              (AUDIO_FREQ_MAX)
 #define CFG_TUD_AUDIO_FUNC_1_DESC_LEN_API             1 
 #define CFG_TUD_AUDIO_ENABLE_INTERRUPT_EP             1
 #define CFG_TUD_AUDIO_FUNC_1_N_AS_INT                 2
@@ -86,7 +86,7 @@
 // Microphone
 #define CFG_TUD_AUDIO_ENABLE_EP_IN                    1
 #define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX    (BITS_PER_SAMPLE/8)    
-#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX            2         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
+#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX            1         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
 #define CFG_TUD_AUDIO_EP_SZ_IN                        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
 #define CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL              1
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX             CFG_TUD_AUDIO_EP_SZ_IN
