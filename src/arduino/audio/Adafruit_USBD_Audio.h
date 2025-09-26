@@ -162,14 +162,15 @@ class Adafruit_USBD_Audio : public Adafruit_USBD_Interface {
     return getInterfaceDescriptor(0, nullptr, 0);
   }
 
-  virtual uint16_t getMaxEPSize() {
-    return TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE,
-                             _bits_per_sample / 8, _channels);
-  }
+virtual uint16_t getMaxEPSize() {
+  if (_sample_rate == 384000 && _channels == 1 && _bits_per_sample == 16) return 768;
+  return TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, _bits_per_sample / 8, _channels);
+}
 
-  virtual uint16_t getIOSize() {
-    return TUD_AUDIO_EP_SIZE(_sample_rate, _bits_per_sample / 8, _channels);
-  }
+virtual uint16_t getIOSize() {
+  if (_sample_rate == 384000 && _channels == 1 && _bits_per_sample == 16) return 768;
+  return TUD_AUDIO_EP_SIZE(_sample_rate, _bits_per_sample / 8, _channels);
+}
 
   virtual uint8_t getFeatureUnitLength() { return (6 + (_channels + 1) * 4); }
 
@@ -339,11 +340,10 @@ class Adafruit_USBD_Audio : public Adafruit_USBD_Interface {
 
   // build interface descriptor
   virtual uint16_t interfaceDescriptor(uint8_t *buf, uint16_t bufsize);
-  virtual void interfaceDescriptorHeader(uint8_t *buf, uint8_t total_len,
-                                         uint8_t category);
-  virtual void interfaceDescriptorMicrophone(uint8_t *buf, uint8_t total_len);
-  virtual void interfaceDescriptorSpeaker(uint8_t *buf, uint8_t total_len);
-  virtual void interfaceDescriptorHeadset(uint8_t *buf, uint8_t total_len);
+  virtual void interfaceDescriptorHeader(uint8_t *buf, uint16_t total_len, uint8_t category);
+  virtual void interfaceDescriptorMicrophone(uint8_t *buf, uint16_t total_len);
+  virtual void interfaceDescriptorSpeaker(uint8_t *buf, uint16_t total_len);
+  virtual void interfaceDescriptorHeadset(uint8_t *buf, uint16_t total_len);
 };
 
 #endif  // #if CFG_TUD_ENABLED && CFG_TUD_AUDIO

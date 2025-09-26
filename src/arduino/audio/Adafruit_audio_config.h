@@ -35,7 +35,7 @@
 #  define AUDIO_USB_MAX_CHANNELS    1
 #endif
 #ifndef AUDIO_FREQ_MIN
-#  define AUDIO_FREQ_MIN            8000
+#  define AUDIO_FREQ_MIN            384000
 #endif
 #ifndef AUDIO_FREQ_MAX
 #  define AUDIO_FREQ_MAX            384000
