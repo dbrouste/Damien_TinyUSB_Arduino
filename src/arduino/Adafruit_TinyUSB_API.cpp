@@ -50,10 +50,12 @@ void TinyUSB_Device_Task(void) {
 
 #ifndef ARDUINO_ARCH_ESP32
 void TinyUSB_Device_FlushCDC(void) {
+#if CFG_TUD_CDC
   uint8_t const cdc_instance = Adafruit_USBD_CDC::getInstanceCount();
   for (uint8_t instance = 0; instance < cdc_instance; instance++) {
     tud_cdc_n_write_flush(instance);
   }
+#endif
 }
 #endif
 #endif // CFG_TUD_ENABLED

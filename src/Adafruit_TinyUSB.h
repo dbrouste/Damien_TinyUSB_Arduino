@@ -66,8 +66,15 @@
 #endif
 
 // Initialize device hardware, stack, also Serial as CDC
+// Initialize device hardware, stack, also Serial as CDC
 // Wrapper for TinyUSBDevice.begin(rhport)
+#ifdef __cplusplus
+extern "C" {
+#endif
 void TinyUSB_Device_Init(uint8_t rhport);
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

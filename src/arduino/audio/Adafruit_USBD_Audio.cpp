@@ -521,95 +521,125 @@ void Adafruit_USBD_Audio::interfaceDescriptorHeader(uint8_t *buf, uint16_t total
 
 void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /*total_len_ignored*/){
 
-  // ---- Build descriptors (but DON'T append the header yet) ----
+  // --- UAC1 Microphone Descriptor Implementation ---
 
-  // Clock Source (8 bytes)
-  uint8_t d4[] = { TUD_AUDIO_DESC_CLK_SRC(
-    /*_clkid*/ UAC2_ENTITY_CLOCK,
-    /*_attr*/  AUDIO_CLOCK_SOURCE_ATT_INT_FIX_CLK,
-    /*_ctrl*/ (AUDIO_CTRL_R << AUDIO_CLOCK_SOURCE_CTRL_CLK_FRQ_POS) |
-             (AUDIO_CTRL_R << AUDIO_CLOCK_SOURCE_CTRL_CLK_VAL_POS),
-    /*_assocTerm*/ UAC2_ENTITY_MIC_INPUT_TERMINAL,
-    /*_stridx*/ 0x00) };
+  // 1. IAD (Interface Association Descriptor)
+  uint8_t d_iad[] = { TUD_AUDIO_DESC_IAD(_itfnum_ctl, _itf_number_total, 0x00) };
+  append(buf, d_iad, sizeof(d_iad));
 
-  // Input Terminal: Microphone (17 bytes)
-  uint8_t d7[] = { TUD_AUDIO_DESC_INPUT_TERM(
-    UAC2_ENTITY_MIC_INPUT_TERMINAL,
-    AUDIO_TERM_TYPE_IN_GENERIC_MIC,
-    0x00,
-    UAC2_ENTITY_CLOCK,
-    _channels,
-    AUDIO_CHANNEL_CONFIG_FRONT_LEFT,
-    0x00,
-    (AUDIO_CTRL_R << AUDIO_IN_TERM_CTRL_CONNECTOR_POS),
-    0x00) };
+  // 2. Standard AC Interface Descriptor (Control Interface)
+  uint8_t d_std_ac[] = { 
+      9, TUSB_DESC_INTERFACE, _itfnum_ctl, 0, 0, TUSB_CLASS_AUDIO, AUDIO_SUBCLASS_CONTROL, 0, 0 
+  };
+  append(buf, d_std_ac, sizeof(d_std_ac));
 
-  // Output Terminal: USB Streaming (12 bytes)
-  uint8_t d8[] = { TUD_AUDIO_DESC_OUTPUT_TERM(
-    UAC2_ENTITY_MIC_OUTPUT_TERMINAL,
-    AUDIO_TERM_TYPE_USB_STREAMING,
-    0x00,
-    UAC2_ENTITY_MIC_FEATURE_UNIT,
-    UAC2_ENTITY_CLOCK,
-    0x0000,
-    0x00) };
+  // 3. Class Specific AC Header
+  //    Calculate total length of AC descriptors:
+  //    Header(9) + InputTerm(12) + OutputTerm(9) + FeatureUnit(7 + (ch+1)*1)
+  uint8_t fu_len = 7 + (_channels + 1) * 1; 
+  uint16_t ac_total_len = 9 + 12 + 9 + fu_len;
 
-  // Feature Unit length (mono: 14 bytes). You already have this:
-  const uint8_t fu_len = getFeatureUnitLength(); // (6 + (_channels+1)*4)
+  uint8_t d_cs_ac[] = {
+      9, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_HEADER,
+      0x00, 0x01, // bcdADC 1.00
+      U16_TO_U8S_LE(ac_total_len),
+      1, // bInCollection
+      _itfnum_mic // baInterfaceNr
+  };
+  append(buf, d_cs_ac, sizeof(d_cs_ac));
 
-  // ---- Compute AC class-specific total length exactly ----
-  const uint16_t ac_total =
-      sizeof(d4)   // Clock Source (8)
-    + sizeof(d7)   // Input Terminal (17)
-    + sizeof(d8)   // Output Terminal (12)
-    + fu_len;      // Feature Unit (14 with 1 channel)
+  // 4. Input Terminal (Microphone) - TerminalID 1
+  uint8_t d_in_term[] = {
+      12, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_INPUT_TERMINAL,
+      1, // bTerminalID
+      U16_TO_U8S_LE(AUDIO_TERM_TYPE_IN_GENERIC_MIC),
+      0, // bAssocTerminal
+      _channels,
+      U16_TO_U8S_LE(0x0001), // wChannelConfig (Front Left/Center)
+      0, 0 // iChannelNames, iTerminal
+  };
+  append(buf, d_in_term, sizeof(d_in_term));
 
-  // ---- NOW write the AC header with the CORRECT total ----
-  interfaceDescriptorHeader(buf, ac_total, AUDIO_FUNC_MICROPHONE);
+  // 5. Feature Unit - UnitID 2, SourceID 1
+  uint8_t d_fu_hdr[] = {
+      fu_len, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_FEATURE_UNIT,
+      2, // bUnitID
+      1, // bSourceID
+      1, // bControlSize
+      // Controls follow
+  };
+  append(buf, d_fu_hdr, sizeof(d_fu_hdr));
+  
+  // Controls: Mute | Volume = 0x03
+  uint8_t ctrl = 0x03; 
+  for(int i=0; i<=_channels; i++) append(buf, &ctrl, 1);
+  
+  uint8_t iFeature = 0;
+  append(buf, &iFeature, 1);
 
-  // ---- And append the AC class-specific descriptors ----
-  append(buf, d4, sizeof(d4));
-  append(buf, d7, sizeof(d7));
-  append(buf, d8, sizeof(d8));
+  // 6. Output Terminal (USB Streaming) - TerminalID 3, SourceID 2
+  uint8_t d_out_term[] = {
+      9, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_OUTPUT_TERMINAL,
+      3, // bTerminalID
+      U16_TO_U8S_LE(AUDIO_TERM_TYPE_USB_STREAMING),
+      0, // bAssocTerminal
+      2, // bSourceID
+      0 // iTerminal
+  };
+  append(buf, d_out_term, sizeof(d_out_term));
 
-  // Feature Unit body (you already do this; keep as-is)
-  uint8_t feature_unit_len = fu_len;
-  uint8_t df1[] = { feature_unit_len, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_FEATURE_UNIT,
-                    UAC2_ENTITY_MIC_FEATURE_UNIT, UAC2_ENTITY_MIC_INPUT_TERMINAL };
-  append(buf, df1, sizeof(df1));
-  for (int j = 0; j < _channels + 1; j++) {
-    uint8_t df2[] = { U32_TO_U8S_LE(AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_MUTE_POS |
-                                    AUDIO_CTRL_RW << AUDIO_FEATURE_UNIT_CTRL_VOLUME_POS) };
-    append(buf, df2, sizeof(df2));
-  }
-  uint8_t df3[1] = { 0x00 };
-  append(buf, df3, sizeof(df3));
+  // --- Audio Streaming Interface ---
 
-  // ---- AS interface + format + ISO EP (leave as you have) ----
-  uint8_t d15[] = { TUD_AUDIO_DESC_STD_AS_INT((uint8_t)(_itfnum_mic), 0x00, 0x00, 0x00) };
-  append(buf, d15, sizeof(d15));
+  // 7. Standard AS Interface (Alt 0) - Zero Bandwidth
+  uint8_t d_as_int0[] = {
+      9, TUSB_DESC_INTERFACE, _itfnum_mic, 0, 0, TUSB_CLASS_AUDIO, AUDIO_SUBCLASS_STREAMING, 0, 0
+  };
+  append(buf, d_as_int0, sizeof(d_as_int0));
 
-  uint8_t d16[] = { TUD_AUDIO_DESC_STD_AS_INT((uint8_t)(_itfnum_mic), 0x01, 0x01, 0x00) };
-  append(buf, d16, sizeof(d16));
+  // 8. Standard AS Interface (Alt 1) - Operational
+  uint8_t d_as_int1[] = {
+      9, TUSB_DESC_INTERFACE, _itfnum_mic, 1, 1, TUSB_CLASS_AUDIO, AUDIO_SUBCLASS_STREAMING, 0, 0
+  };
+  append(buf, d_as_int1, sizeof(d_as_int1));
 
-  uint8_t d17[] = { TUD_AUDIO_DESC_CS_AS_INT(UAC2_ENTITY_MIC_OUTPUT_TERMINAL, AUDIO_CTRL_NONE,
-                                             AUDIO_FORMAT_TYPE_I, AUDIO_DATA_FORMAT_TYPE_I_PCM,
-                                             _channels, AUDIO_CHANNEL_CONFIG_FRONT_LEFT, 0x00) };
-  append(buf, d17, sizeof(d17));
+  // 9. Class Specific AS Interface
+  uint8_t d_cs_as[] = {
+      7, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AS_INTERFACE_AS_GENERAL,
+      3, // bTerminalLink (Output Terminal ID)
+      1, // bDelay
+      U16_TO_U8S_LE(0x0001) // wFormatTag (PCM)
+  };
+  append(buf, d_cs_as, sizeof(d_cs_as));
 
-  uint8_t d18[] = { TUD_AUDIO_DESC_TYPE_I_FORMAT((uint8_t)(_bits_per_sample/8), (uint8_t)_bits_per_sample) };
-  append(buf, d18, sizeof(d18));
+  // 10. Format Type I
+  uint8_t d_fmt[] = {
+      11, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AS_INTERFACE_FORMAT_TYPE,
+      AUDIO_FORMAT_TYPE_I,
+      _channels,
+      (uint8_t)(_bits_per_sample/8),
+      (uint8_t)_bits_per_sample,
+      1, // bSamFreqType
+      (uint8_t)(_sample_rate & 0xFF), (uint8_t)((_sample_rate >> 8) & 0xFF), (uint8_t)((_sample_rate >> 16) & 0xFF)
+  };
+  append(buf, d_fmt, sizeof(d_fmt));
 
-  uint8_t d19[] = { TUD_AUDIO_DESC_STD_AS_ISO_EP(_ep_mic,
-                    (TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS | TUSB_ISO_EP_ATT_DATA),
-                    768, 0x01) };
-  append(buf, d19, sizeof(d19));
+  // 11. Standard ISO Endpoint
+  uint8_t d_iso_ep[] = {
+      7, TUSB_DESC_ENDPOINT, _ep_mic,
+      TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS,
+      U16_TO_U8S_LE(getMaxEPSize()),
+      1 // bInterval
+  };
+  append(buf, d_iso_ep, sizeof(d_iso_ep));
 
-  uint8_t d20[] = { TUD_AUDIO_DESC_CS_AS_ISO_EP(AUDIO_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK,
-                                                AUDIO_CTRL_NONE,
-                                                AUDIO_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED,
-                                                0x0000) };
-  append(buf, d20, sizeof(d20));
+  // 12. Class Specific ISO Endpoint
+  uint8_t d_cs_iso[] = {
+      7, TUSB_DESC_CS_ENDPOINT, AUDIO_CS_EP_SUBTYPE_GENERAL,
+      0, // bmAttributes
+      0, // bLockDelayUnits
+      U16_TO_U8S_LE(0) // wLockDelay
+  };
+  append(buf, d_cs_iso, sizeof(d_cs_iso));
 }
 
 
