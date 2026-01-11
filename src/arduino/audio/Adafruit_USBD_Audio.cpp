@@ -26,6 +26,10 @@
 
 #if CFG_TUD_ENABLED && CFG_TUD_AUDIO
 
+#ifndef AUDIO_EP_CTRL_SAMPLING_FREQ
+#define AUDIO_EP_CTRL_SAMPLING_FREQ 0x01
+#endif
+
 Adafruit_USBD_Audio *self_Adafruit_USBD_Audio = nullptr;
 
 /*------------- MAIN -------------*/
@@ -152,22 +156,29 @@ bool Adafruit_USBD_Audio::set_itf_cb(uint8_t rhport,
 bool Adafruit_USBD_Audio::set_req_ep_cb(uint8_t rhport,
                                         tusb_control_request_t const *p_request,
                                         uint8_t *pBuff) {
-  (void)rhport;
-  (void)pBuff;
-
   // We do not support any set range requests here, only current value requests
   TU_VERIFY(p_request->bRequest == AUDIO_CS_REQ_CUR);
 
-  // Page 91 in UAC2 specification
-  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
-  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
-  uint8_t ep = TU_U16_LOW(p_request->wIndex);
+  uint8_t cs = TU_U16_HIGH(p_request->wValue); // Control Selector
+  
+  if (cs == AUDIO_EP_CTRL_SAMPLING_FREQ) { // 0x01 - SAMPLING_FREQ_CONTROL in UAC1
+     // UAC1: 3-byte sample rate (Little Endian)
+     // Extract 24-bit value
+     uint32_t rate = ((uint32_t)pBuff[2] << 16) | ((uint32_t)pBuff[1] << 8) | (uint32_t)pBuff[0];
+     
+     // Only accept if it matches our supported rate (or close enough/logic to change it)
+     // For this simple mic, we just check if it's the configured rate. 
+     // Real implementation might allow changing.
+     if (rate == _sample_rate) {
+         return true; 
+     }
+     
+     // Optionally allow updating _sample_rate if your application supports dynamic rate changes
+     // _sample_rate = rate; 
+     return true;
+  }
 
-  (void)channelNum;
-  (void)ctrlSel;
-  (void)ep;
-
-  return false;  // Yet not implemented
+  return false;
 }
 
 // Invoked when audio class specific set request received for an interface
@@ -226,20 +237,21 @@ bool Adafruit_USBD_Audio::set_req_entity_cb(
 // Invoked when audio class specific get request received for an EP
 bool Adafruit_USBD_Audio::get_req_ep_cb(
     uint8_t rhport, tusb_control_request_t const *p_request) {
-  (void)rhport;
+  
+  uint8_t cs = TU_U16_HIGH(p_request->wValue); // Control Selector
 
-  // Page 91 in UAC2 specification
-  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
-  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
-  uint8_t ep = TU_U16_LOW(p_request->wIndex);
+  if (cs == AUDIO_EP_CTRL_SAMPLING_FREQ) { // 0x01
+     if (p_request->bRequest == AUDIO_CS_REQ_CUR) {
+        // Return 3-byte sample rate
+        uint8_t data[3];
+        data[0] = (uint8_t)(_sample_rate & 0xFF);
+        data[1] = (uint8_t)((_sample_rate >> 8) & 0xFF);
+        data[2] = (uint8_t)((_sample_rate >> 16) & 0xFF);
+        return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, data, 3);
+     }
+  }
 
-  (void)channelNum;
-  (void)ctrlSel;
-  (void)ep;
-
-  //	return tud_control_xfer(rhport, p_request, &tmp, 1);
-
-  return false;  // Yet not implemented
+  return false; 
 }
 
 // Invoked when audio class specific get request received for an interface
@@ -524,8 +536,21 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
   // --- UAC1 Microphone Descriptor Implementation ---
 
   // 1. IAD (Interface Association Descriptor)
-  uint8_t d_iad[] = { TUD_AUDIO_DESC_IAD(_itfnum_ctl, _itf_number_total, 0x00) };
+  // 1. IAD (Interface Association Descriptor)
+  // Request: Do NOT declare IAD
+  /*
+  uint8_t d_iad[] = {
+      8, // bLength
+      TUSB_DESC_INTERFACE_ASSOCIATION, // bDescriptorType
+      _itfnum_ctl, // bFirstInterface
+      _itf_number_total, // bInterfaceCount
+      TUSB_CLASS_AUDIO, // bFunctionClass
+      AUDIO_FUNCTION_SUBCLASS_UNDEFINED, // bFunctionSubClass (0x00)
+      0x00, // bFunctionProtocol (UAC1 - must be 0x00, NOT 0x20)
+      0x00 // iFunction
+  };
   append(buf, d_iad, sizeof(d_iad));
+  */
 
   // 2. Standard AC Interface Descriptor (Control Interface)
   uint8_t d_std_ac[] = { 
@@ -535,7 +560,9 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
 
   // 3. Class Specific AC Header
   //    Calculate total length of AC descriptors:
-  //    Header(9) + InputTerm(12) + OutputTerm(9) + FeatureUnit(7 + (ch+1)*1)
+  //    Header(9) + InputTerm(12) + OutputTerm(9) + FeatureUnit(9 + (ch+1)*1) ? 
+  //    My Feature Unit is 9 bytes. 
+  //    Header(9) + Input(12) + Output(9) + Feature(9) = 39.
   uint8_t fu_len = 7 + (_channels + 1) * 1; 
   uint16_t ac_total_len = 9 + 12 + 9 + fu_len;
 
@@ -555,7 +582,7 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
       U16_TO_U8S_LE(AUDIO_TERM_TYPE_IN_GENERIC_MIC),
       0, // bAssocTerminal
       _channels,
-      U16_TO_U8S_LE(0x0001), // wChannelConfig (Front Left/Center)
+      U16_TO_U8S_LE(0x0000), // wChannelConfig (Not Predefined - Pettersson match)
       0, 0 // iChannelNames, iTerminal
   };
   append(buf, d_in_term, sizeof(d_in_term));
@@ -570,9 +597,12 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
   };
   append(buf, d_fu_hdr, sizeof(d_fu_hdr));
   
-  // Controls: Mute | Volume = 0x03
-  uint8_t ctrl = 0x03; 
-  for(int i=0; i<=_channels; i++) append(buf, &ctrl, 1);
+  // Controls: Pettersson Master(0x02), Ch1(0x00)
+  // i=0 (Master), i=1 (Channel 1)
+  for(int i=0; i<=_channels; i++) {
+      uint8_t val = (i==0) ? 0x02 : 0x00;
+      append(buf, &val, 1);
+  }
   
   uint8_t iFeature = 0;
   append(buf, &iFeature, 1);
@@ -625,17 +655,20 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
 
   // 11. Standard ISO Endpoint
   uint8_t d_iso_ep[] = {
-      7, TUSB_DESC_ENDPOINT, _ep_mic,
+      9, // bLength (Modified to 9 as requested)
+      TUSB_DESC_ENDPOINT, 0x81, // Force Endpoint 0x81
       TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS,
-      U16_TO_U8S_LE(getMaxEPSize()),
-      1 // bInterval
+      U16_TO_U8S_LE(780), // Pettersson uses 780 bytes
+      1, // bInterval
+      0, // bRefresh
+      0  // bSynchAddress
   };
   append(buf, d_iso_ep, sizeof(d_iso_ep));
 
   // 12. Class Specific ISO Endpoint
   uint8_t d_cs_iso[] = {
       7, TUSB_DESC_CS_ENDPOINT, AUDIO_CS_EP_SUBTYPE_GENERAL,
-      0, // bmAttributes
+      0x00, // bmAttributes (0x00 - Fixed Freq - Pettersson match)
       0, // bLockDelayUnits
       U16_TO_U8S_LE(0) // wLockDelay
   };
