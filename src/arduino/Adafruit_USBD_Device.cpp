@@ -155,9 +155,11 @@ void Adafruit_USBD_Device::task(void) {
 
 #ifdef TINYUSB_NEED_POLLING_TASK
   // can also be used with port with built-in support
+#if CFG_TUD_CDC
   if (SerialTinyUSB) {
     SerialTinyUSB.flush();
   }
+#endif
 #endif
 }
 
@@ -248,9 +250,11 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   // Use Interface Association Descriptor (IAD) for CDC
   // As required by USB Specs IAD's subclass must be common class (2) and
   // protocol must be IAD (1)
+#if CFG_TUD_CDC
   _desc_device.bDeviceClass = TUSB_CLASS_MISC;
   _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
   _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
+#endif
 
 #if defined(ARDUINO_ARCH_ESP32)
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
@@ -269,7 +273,9 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   config->bNumInterfaces = _itf_count;
 #endif
 #else
+#if CFG_TUD_CDC
   SerialTinyUSB.begin(115200);
+#endif
 
   // Init device hardware and call tusb_init()
   TinyUSB_Port_InitDevice(rhport);

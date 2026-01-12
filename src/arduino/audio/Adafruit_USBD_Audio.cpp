@@ -474,7 +474,7 @@ uint16_t Adafruit_USBD_Audio::interfaceDescriptor(uint8_t *buf, uint16_t bufsize
   if (_desc_len == 0){
    _itf_number_total = 1;
    _itfnum_ctl = TinyUSBDevice.allocInterface();
-   _ep_ctl = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+   // _ep_ctl = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
   }
 
   // Setup endpints and interfaces
@@ -560,16 +560,14 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
 
   // 3. Class Specific AC Header
   //    Calculate total length of AC descriptors:
-  //    Header(9) + InputTerm(12) + OutputTerm(9) + FeatureUnit(9 + (ch+1)*1) ? 
-  //    My Feature Unit is 9 bytes. 
-  //    Header(9) + Input(12) + Output(9) + Feature(9) = 39.
-  uint8_t fu_len = 7 + (_channels + 1) * 1; 
-  uint16_t ac_total_len = 9 + 12 + 9 + fu_len;
+  //    Header(9) + InputTerm(12) + OutputTerm(9) + FeatureUnit(9) = 39.
+  uint8_t fu_len = 9; 
+  uint16_t ac_total_len = 9 + 12 + 9 + fu_len; // This is 39
 
   uint8_t d_cs_ac[] = {
       9, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_HEADER,
       0x00, 0x01, // bcdADC 1.00
-      U16_TO_U8S_LE(ac_total_len),
+      U16_TO_U8S_LE(38), // Forced to 38 to match Pettersson quirk (Real is 39)
       1, // bInCollection
       _itfnum_mic // baInterfaceNr
   };
@@ -597,24 +595,27 @@ void Adafruit_USBD_Audio::interfaceDescriptorMicrophone(uint8_t *buf, uint16_t /
   };
   append(buf, d_fu_hdr, sizeof(d_fu_hdr));
   
-  // Controls: Pettersson Master(0x02), Ch1(0x00)
-  // i=0 (Master), i=1 (Channel 1)
-  for(int i=0; i<=_channels; i++) {
-      uint8_t val = (i==0) ? 0x02 : 0x00;
-      append(buf, &val, 1);
-  }
+  // Controls: Pettersson Master(0x02) AND Channel 1 (0x00). Total 9 bytes.
+  uint8_t val0 = 0x02; // Master Volume
+  append(buf, &val0, 1);
+  uint8_t val1 = 0x00; // Channel 1 None
+  append(buf, &val1, 1);
   
   uint8_t iFeature = 0;
   append(buf, &iFeature, 1);
 
   // 6. Output Terminal (USB Streaming) - TerminalID 3, SourceID 2
+  // 6. Output Terminal (USB Streaming) - TerminalID 3, SourceID 2
+  // Restore to 9 bytes (Standard).
+  // With Header=38, this creates the "Lie" (Total 39, Claim 38).
   uint8_t d_out_term[] = {
-      9, TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_OUTPUT_TERMINAL,
+      9, // bLength (Restored to 9)
+      TUSB_DESC_CS_INTERFACE, AUDIO_CS_AC_INTERFACE_OUTPUT_TERMINAL,
       3, // bTerminalID
       U16_TO_U8S_LE(AUDIO_TERM_TYPE_USB_STREAMING),
       0, // bAssocTerminal
       2, // bSourceID
-      0 // iTerminal
+      0 // iTerminal (Restored)
   };
   append(buf, d_out_term, sizeof(d_out_term));
 

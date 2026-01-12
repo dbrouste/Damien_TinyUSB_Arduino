@@ -47,10 +47,12 @@
 //--------------------------------------------------------------------
 // Debugging Logging and Testing
 //--------------------------------------------------------------------
-#define AUDIO_LOG(...)              {char msg[160]; snprintf(msg, 160, __VA_ARGS__); LOG_AUDIO_OUTPUT.println(msg); LOG_AUDIO_OUTPUT.flush();}
+// Forced Disable for pure Mic mode
+#define LOG_AUDIO_OUTPUT
+#define AUDIO_LOG(...)
+
 #define AUDIO_NO_LOG(...)
 
-#define LOG_AUDIO_OUTPUT            Serial
 #define AUDIO_DEBUG                 false
 #define LOG_AUDIO_ERROR             AUDIO_LOG
 #define LOG_AUDIO_DEBUG             AUDIO_LOG      
@@ -87,7 +89,8 @@
 #define CFG_TUD_AUDIO_ENABLE_EP_IN                    1
 #define CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX    (BITS_PER_SAMPLE/8)    
 #define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX            1         // This value is not required by the driver, it parses this information from the descriptor once the alternate interface is set by the host - we use it for the setup
-#define CFG_TUD_AUDIO_EP_SZ_IN                        TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
+// Increased buffer size to support Pettersson 780 byte packet size (standard calc gives ~769)
+#define CFG_TUD_AUDIO_EP_SZ_IN                        1000 
 #define CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL              1
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX             CFG_TUD_AUDIO_EP_SZ_IN
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SW_BUF_SZ          (TUD_OPT_HIGH_SPEED ? 32 : 4) * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX // Example write FIFO every 1ms, so it should be 8 times larger for HS device
